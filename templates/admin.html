@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - User Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container { margin-top: 2rem; }
+        .user-list { margin-top: 2rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Dashboard</h1>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Add Authorized User</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="addUserForm">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email Address</label>
+                                <input type="email" class="form-control" id="email" name="email" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Add User</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="user-list">
+            <h3>Authorized Users</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Added Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="userList">
+                    <!-- User list will be populated here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Fetch and display authorized users
+        function loadUsers() {
+            fetch('/api/admin/authorized-users')
+                .then(response => response.json())
+                .then(users => {
+                    const userList = document.getElementById('userList');
+                    userList.innerHTML = '';
+                    users.forEach(user => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${user.email}</td>
+                            <td>${new Date(user.added_date).toLocaleDateString()}</td>
+                            <td>
+                                <button class="btn btn-danger btn-sm" onclick="removeUser('${user._id}')">Remove</button>
+                            </td>
+                        `;
+                        userList.appendChild(row);
+                    });
+                });
+        }
+
+        // Add new authorized user
+        document.getElementById('addUserForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            
+            fetch('/api/admin/authorized-users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('email').value = '';
+                    loadUsers();
+                    alert('User added successfully!');
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            });
+        });
+
+        // Remove authorized user
+        function removeUser(userId) {
+            if (confirm('Are you sure you want to remove this user?')) {
+                fetch(`/api/admin/authorized-users/${userId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        loadUsers();
+                        alert('User removed successfully!');
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                });
+            }
+        }
+
+        // Load users when page loads
+        loadUsers();
+    </script>
+</body>
+</html> 

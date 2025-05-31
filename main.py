@@ -1,4 +1,3 @@
-
 import os
 import logging
 import uuid
@@ -198,99 +197,65 @@ def microsoft_auth():
             return "Authentication failed: No authorization code", 400
 
         # Exchange code for token
-        redirect_uri = url_for('microsoft_auth', _external=True).replace('http://', 'https://')
-
+        token_url = 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
         token_data = {
-            'grant_type': 'authorization_code',
-            'code': code,
-            'redirect_uri': redirect_uri,
             'client_id': os.getenv("MICROSOFT_CLIENT_ID"),
             'client_secret': os.getenv("MICROSOFT_CLIENT_SECRET"),
+            'code': code,
+            'redirect_uri': url_for('microsoft_auth', _external=True).replace('http://', 'https://'),
+            'grant_type': 'authorization_code'
         }
 
-        token_response = requests.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-            data=token_data,
-            headers={'Content-Type': 'application/x-www-form-urlencoded'}
-        )
+        token_response = requests.post(token_url, data=token_data)
+        token_json = token_response.json()
 
-        if token_response.status_code != 200:
-            logger.error(f"Token exchange failed: {token_response.text}")
-            return f"Token exchange failed: {token_response.status_code}", 400
+        if 'error' in token_json:
+            logger.error(f"Token error: {token_json['error']}")
+            return f"Authentication failed: {token_json['error']}", 400
 
-        token = token_response.json()
-        access_token = token.get('access_token')
-
-        if not access_token:
-            logger.error("No access token in response")
-            return "Authentication failed: No access token", 400
-
-        # Get user information from Microsoft Graph
+        # Get user info from Microsoft Graph
+        graph_url = 'https://graph.microsoft.com/v1.0/me'
         headers = {
-            'Authorization': f'Bearer {access_token}',
-            'Content-Type': 'application/json'
+            'Authorization': f"Bearer {token_json['access_token']}"
         }
 
-        user_response = requests.get('https://graph.microsoft.com/v1.0/me', headers=headers)
+        graph_response = requests.get(graph_url, headers=headers)
+        user_info = graph_response.json()
 
-        if user_response.status_code != 200:
-            logger.error(f"Failed to get user info: {user_response.text}")
-            return f"Failed to get user information: {user_response.status_code}", 400
+        if 'error' in user_info:
+            logger.error(f"Graph API error: {user_info['error']}")
+            return f"Authentication failed: {user_info['error']['message']}", 400
 
-        graph_data = user_response.json()
+        email = user_info.get('mail') or user_info.get('userPrincipalName')
+        
+        # Check if user is authorized
+        authorized_user = mongo.db.authorized_users.find_one({'email': email})
+        if not authorized_user:
+            logger.error(f"Unauthorized access attempt: {email}")
+            return "You are not authorized to access this application. Please contact your administrator.", 403
 
-        # Continue with your existing user logic
-        email = graph_data.get('mail', graph_data.get('userPrincipalName'))
-        if not email:
-            logger.error("Could not retrieve email from Microsoft account")
-            return "Could not retrieve email from Microsoft account", 400
-
-        # Check if user exists
-        user_data = mongo.db.users.find_one({"email": email})
-
-        if not user_data:
-            # Create new user with Microsoft Graph data
-            new_user = {
-                "email": email,
-                "name": graph_data.get('displayName', ''),
-                "microsoft_id": graph_data.get('id', ''),
-                "job_title": graph_data.get('jobTitle', ''),
-                "department": graph_data.get('department', ''),
-                "auth_provider": "microsoft",
-                "role": "user",
-                "created_at": datetime.now(),
-                "last_login": datetime.now()
+        # Check if user exists in our database
+        user = mongo.db.users.find_one({'email': email})
+        
+        if not user:
+            # Create new user
+            user_data = {
+                'email': email,
+                'name': user_info.get('displayName', ''),
+                'microsoft_id': user_info.get('id'),
+                'role': 'user'
             }
-
-            user_id = mongo.db.users.insert_one(new_user).inserted_id
-            user_data = new_user
-            user_data['_id'] = user_id
-
-            logger.info(f"Created new user: {email}")
-        else:
-            # Update existing user info with latest Microsoft data
-            mongo.db.users.update_one(
-                {"_id": user_data['_id']},
-                {"$set": {
-                    "name": graph_data.get('displayName', user_data.get('name', '')),
-                    "microsoft_id": graph_data.get('id', user_data.get('microsoft_id', '')),
-                    "job_title": graph_data.get('jobTitle', user_data.get('job_title', '')),
-                    "department": graph_data.get('department', user_data.get('department', '')),
-                    "auth_provider": "microsoft",
-                    "last_login": datetime.now()
-                }}
-            )
-
-            logger.info(f"Updated existing user: {email}")
-
-        # Login the user
-        user = User(user_data)
-        login_user(user)
-
+            result = mongo.db.users.insert_one(user_data)
+            user = mongo.db.users.find_one({'_id': result.inserted_id})
+        
+        # Log in the user
+        user_obj = User(user)
+        login_user(user_obj)
+        
         return redirect(url_for('index'))
 
     except Exception as e:
-        logger.error(f"Error during Microsoft authentication: {str(e)}")
+        logger.error(f"Authentication error: {str(e)}")
         return f"Authentication failed: {str(e)}", 500
 
 @app.route('/logout')
@@ -643,7 +608,7 @@ def generate_ai_response(user_message, conversation_history):
 
                     if os.path.exists(file_path):
                         # For text-based files, include their content in the message
-                        if file_type and ('text/' in file_type or file_name.lower().endswith(('.txt', '.md', '.csv', '.json', '.py', '.js', '.html', '.css', '.c', '.cpp', '.h', '.xml'))):
+                        if file_type and ('text/' in file_type or file_name.lower().endswith(('.txt', '.md', '.csv', '.json', '.py', '.js', '.html', '.css', '.c', '.cpp', '.h', '.xml')):
                             try:
                                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                                     file_content = f.read()
@@ -652,9 +617,9 @@ def generate_ai_response(user_message, conversation_history):
                                     if len(file_content) > 10000:
                                         content += "\n... (content truncated due to length)"
                                     content += "\n```"
-                            except Exception as read_err:
-                                logger.error(f"Error reading file content: {str(read_err)}")
-                                content += f"\n\nFile attached: {file_name} (error reading content: {str(read_err)})"
+                            except Exception as e:
+                                logger.error(f"Error reading file {file_name}: {str(e)}")
+                                content += f"\n\nFile attached: {file_name} (error reading content: {str(e)})"
                         # For binary/non-text files, just mention the file
                         else:
                             content += f"\n\nFile attached: {file_name} (binary/non-text file, type: {file_type})"
@@ -984,6 +949,67 @@ def chat_stream():
     except Exception as e:
         logger.error(f"Error in streaming chat endpoint: {str(e)}")
         return jsonify({'error': 'Failed to process streaming chat request'}), 500
+
+# Add the AuthorizedUser class and routes in the correct location
+class AuthorizedUser:
+    def __init__(self, email):
+        self.email = email
+        self.added_date = datetime.utcnow()
+
+@app.route('/admin')
+@login_required
+def admin_dashboard():
+    if current_user.role != 'admin':
+        return redirect(url_for('index'))
+    return render_template('admin.html')
+
+@app.route('/api/admin/authorized-users', methods=['GET'])
+@login_required
+def get_authorized_users():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    users = list(mongo.db.authorized_users.find({}, {'_id': 1, 'email': 1, 'added_date': 1}))
+    for user in users:
+        user['_id'] = str(user['_id'])
+    return jsonify(users)
+
+@app.route('/api/admin/authorized-users', methods=['POST'])
+@login_required
+def add_authorized_user():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    email = data.get('email')
+    
+    if not email:
+        return jsonify({'success': False, 'message': 'Email is required'}), 400
+    
+    # Check if user already exists
+    existing_user = mongo.db.authorized_users.find_one({'email': email})
+    if existing_user:
+        return jsonify({'success': False, 'message': 'User already exists'}), 400
+    
+    # Add new authorized user
+    new_user = AuthorizedUser(email)
+    mongo.db.authorized_users.insert_one(new_user.__dict__)
+    
+    return jsonify({'success': True, 'message': 'User added successfully'})
+
+@app.route('/api/admin/authorized-users/<user_id>', methods=['DELETE'])
+@login_required
+def remove_authorized_user(user_id):
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        result = mongo.db.authorized_users.delete_one({'_id': ObjectId(user_id)})
+        if result.deleted_count:
+            return jsonify({'success': True, 'message': 'User removed successfully'})
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
 
 if __name__ == "__main__":
     # Ensure admin user exists on startup

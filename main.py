@@ -15,6 +15,7 @@ from bson.objectid import ObjectId
 import secrets
 import urllib.parse
 import json
+from flask_session import Session
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -32,10 +33,14 @@ app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_KEY_PREFIX'] = 'sumersault:'
+app.config['PERMANENT_SESSION_LIFETIME'] = 300  # 5 minutes
+
+# Initialize Flask-Session
+Session(app)
 
 # OAuth configuration to handle CSRF and state
 app.config['AUTHLIB_INSECURE_TRANSPORT'] = True  # Only for development
-app.config['PREFERRED_URL_SCHEME'] = 'https'
+app.config['PREFERRED_URL_SCHEME'] = 'http'  # Changed to http for local development
 
 # MongoDB Configuration
 app.config["MONGO_URI"] = os.environ.get("MONGO_URI", "mongodb://localhost:27017/sumersault")
@@ -148,9 +153,13 @@ def microsoft_login():
     # Generate and store state for CSRF protection
     state = secrets.token_urlsafe(32)
     session['oauth_state'] = state
-
+    session.permanent = True  # Make session persistent
+    
     # Build authorization URL manually
-    redirect_uri = url_for('microsoft_auth', _external=True).replace('http://', 'https://')
+    redirect_uri = url_for('microsoft_auth', _external=True)
+    # Ensure we're using http and localhost
+    redirect_uri = redirect_uri.replace('https://', 'http://')
+    redirect_uri = redirect_uri.replace('10.40.178.72', 'localhost')
 
     auth_params = {
         'client_id': os.getenv("MICROSOFT_CLIENT_ID"),
@@ -163,8 +172,9 @@ def microsoft_login():
 
     auth_url = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + urllib.parse.urlencode(auth_params)
 
-    print(f"DEBUG: Redirect URI being sent: {redirect_uri}")
-    print(f"DEBUG: State generated: {state}")
+    logger.info(f"DEBUG: Redirect URI being sent: {redirect_uri}")
+    logger.info(f"DEBUG: State generated: {state}")
+    logger.info(f"DEBUG: Session state stored: {session.get('oauth_state')}")
 
     return redirect(auth_url)
 
@@ -177,8 +187,14 @@ def microsoft_auth():
         received_state = request.args.get('state')
         stored_state = session.get('oauth_state')
 
+        logger.info(f"DEBUG: Received state: {received_state}")
+        logger.info(f"DEBUG: Stored state: {stored_state}")
+        logger.info(f"DEBUG: Session contents: {dict(session)}")
+
         if not received_state or not stored_state or received_state != stored_state:
             logger.error("State mismatch - CSRF protection triggered")
+            logger.error(f"Received state: {received_state}")
+            logger.error(f"Stored state: {stored_state}")
             return "Authentication failed: Invalid state", 400
 
         # Clear the state from session
@@ -198,19 +214,26 @@ def microsoft_auth():
 
         # Exchange code for token
         token_url = 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
+        redirect_uri = url_for('microsoft_auth', _external=True)
+        redirect_uri = redirect_uri.replace('https://', 'http://')
+        redirect_uri = redirect_uri.replace('10.40.178.72', 'localhost')
+
         token_data = {
             'client_id': os.getenv("MICROSOFT_CLIENT_ID"),
             'client_secret': os.getenv("MICROSOFT_CLIENT_SECRET"),
             'code': code,
-            'redirect_uri': url_for('microsoft_auth', _external=True).replace('http://', 'https://'),
+            'redirect_uri': redirect_uri,
             'grant_type': 'authorization_code'
         }
+
+        logger.info(f"Token request data: {token_data}")
 
         token_response = requests.post(token_url, data=token_data)
         token_json = token_response.json()
 
         if 'error' in token_json:
             logger.error(f"Token error: {token_json['error']}")
+            logger.error(f"Token error description: {token_json.get('error_description', 'No description')}")
             return f"Authentication failed: {token_json['error']}", 400
 
         # Get user info from Microsoft Graph
@@ -293,6 +316,22 @@ def get_conversation():
             # Convert ObjectId to string for JSON serialization
             conversation['id'] = str(conversation['_id'])
             del conversation['_id']
+            
+            # Convert user_id to string
+            if 'user_id' in conversation:
+                conversation['user_id'] = str(conversation['user_id'])
+            
+            # Convert any nested ObjectIds in messages
+            if 'messages' in conversation:
+                for message in conversation['messages']:
+                    if '_id' in message:
+                        message['id'] = str(message['_id'])
+                        del message['_id']
+                    if 'sender_id' in message:
+                        message['sender_id'] = str(message['sender_id'])
+                    if 'for_user_id' in message:
+                        message['for_user_id'] = str(message['for_user_id'])
+
             return jsonify(conversation)
         except Exception as e:
             logger.error(f"Error retrieving conversation: {str(e)}")
@@ -309,6 +348,7 @@ def get_conversation():
 
         conversation_id = mongo.db.conversations.insert_one(new_conversation).inserted_id
         new_conversation['id'] = str(conversation_id)
+        new_conversation['user_id'] = str(new_conversation['user_id'])
         del new_conversation['_id']
         return jsonify(new_conversation)
 
@@ -416,8 +456,21 @@ def add_message_disabled():
         if not updated_conversation:
             return jsonify({'error': 'Conversation not found or access denied'}), 404
             
+        # Convert ObjectIds to strings
         updated_conversation['id'] = str(updated_conversation['_id'])
+        updated_conversation['user_id'] = str(updated_conversation['user_id'])
         del updated_conversation['_id']
+        
+        # Convert any nested ObjectIds in messages
+        if 'messages' in updated_conversation:
+            for message in updated_conversation['messages']:
+                if '_id' in message:
+                    message['id'] = str(message['_id'])
+                    del message['_id']
+                if 'sender_id' in message:
+                    message['sender_id'] = str(message['sender_id'])
+                if 'for_user_id' in message:
+                    message['for_user_id'] = str(message['for_user_id'])
 
         return jsonify({'conversation': updated_conversation, 'message': ai_message})
 
@@ -468,7 +521,7 @@ def delete_conversation():
             return jsonify({'error': 'Conversation not found or access denied'}), 404
 
         logger.info(f"Deleted conversation: {conversation_id}")
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'id': conversation_id})
     except Exception as e:
         logger.error(f"Error deleting conversation: {str(e)}")
         return jsonify({'error': f'Failed to delete conversation: {str(e)}'}), 500
@@ -608,26 +661,23 @@ def generate_ai_response(user_message, conversation_history):
 
                     if os.path.exists(file_path):
                         # For text-based files, include their content in the message
-                        if file_type and ('text/' in file_type or file_name.lower().endswith(('.txt', '.md', '.csv', '.json', '.py', '.js', '.html', '.css', '.c', '.cpp', '.h', '.xml')):
+                        if file_type and ('text/' in file_type or file_name.lower().endswith((
+                            '.txt', '.md', '.csv', '.json', '.py', '.js', '.html', '.css', '.c', '.cpp', '.h', '.xml'
+                        ))):
                             try:
                                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                                     file_content = f.read()
-                                    file_excerpt = file_content[:10000]  # Limit to 10K chars to avoid token limits
-                                    content += f"\n\nFile attached: {file_name}\nContent of the file:\n```\n{file_excerpt}"
-                                    if len(file_content) > 10000:
-                                        content += "\n... (content truncated due to length)"
-                                    content += "\n```"
                             except Exception as e:
                                 logger.error(f"Error reading file {file_name}: {str(e)}")
-                                content += f"\n\nFile attached: {file_name} (error reading content: {str(e)})"
+                                file_content = "Error reading file content"
                         # For binary/non-text files, just mention the file
                         else:
-                            content += f"\n\nFile attached: {file_name} (binary/non-text file, type: {file_type})"
+                            file_content = f"\n\nFile attached: {file_name} (binary/non-text file, type: {file_type})"
                     else:
-                        content += f"\n\nFile attached: {file_name} (file not found on server)"
+                        file_content = f"\n\nFile attached: {file_name} (file not found on server)"
                 except Exception as file_err:
                     logger.error(f"Error processing file content: {str(file_err)}")
-                    content += f"\n\nFile attached (unable to process content: {str(file_err)})"
+                    file_content = f"\n\nFile attached (unable to process content: {str(file_err)})"
 
             # Add to messages based on sender
             if message.get('sender') == 'user':
@@ -878,7 +928,7 @@ def chat_stream():
                     if os.path.exists(file_path):
                         try:
                             # Try to read as text file
-                            with open(file_path, 'r', encoding='utf-8') as f:
+                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                                 file_content = f.read()
                             message_content = f"{user_message}\n\nHere is the content of the attached file '{data['file']['name']}':\n\n```\n{file_content}\n```"
                         except UnicodeDecodeError:
@@ -1014,4 +1064,4 @@ def remove_authorized_user(user_id):
 if __name__ == "__main__":
     # Ensure admin user exists on startup
     ensure_admin_exists()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=True)

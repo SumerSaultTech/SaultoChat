@@ -72,37 +72,41 @@ const MessageList = forwardRef(({ messages, isLoading }, ref) => {
             {message.sender === "user" ? (
               <div>
                 {message.text}
-                {message.file && (
-                  <div className="attached-file">
-                    {message.file.path ? (
-                      <a 
-                        href={`/api/uploads/${message.file.path.split('/').pop()}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="file-link"
-                      >
-                        <div className="file-icon">
-                          <i className={`fas fa-${getFileIcon(message.file.type)}`}></i>
-                        </div>
-                        <div className="file-details">
-                          <div className="file-name">{message.file.name}</div>
-                          <div className="file-size">{formatFileSize(message.file.size)}</div>
-                        </div>
-                        <div className="download-icon">
-                          <i className="fas fa-download"></i>
-                        </div>
-                      </a>
-                    ) : (
-                      <>
-                        <div className="file-icon">
-                          <i className={`fas fa-${getFileIcon(message.file.type)}`}></i>
-                        </div>
-                        <div className="file-details">
-                          <div className="file-name">{message.file.name}</div>
-                          <div className="file-size">{formatFileSize(message.file.size)}</div>
-                        </div>
-                      </>
-                    )}
+                {message.files && message.files.length > 0 && (
+                  <div className="attached-files">
+                    {message.files.map((file, index) => (
+                      <div key={index} className="attached-file">
+                        {file.path ? (
+                          <a 
+                            href={`/api/uploads/${file.path.split('/').pop()}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="file-link"
+                          >
+                            <div className="file-icon">
+                              <i className={`fas fa-${getFileIcon(file.type)}`}></i>
+                            </div>
+                            <div className="file-details">
+                              <div className="file-name">{file.name}</div>
+                              <div className="file-size">{formatFileSize(file.size)}</div>
+                            </div>
+                            <div className="download-icon">
+                              <i className="fas fa-download"></i>
+                            </div>
+                          </a>
+                        ) : (
+                          <>
+                            <div className="file-icon">
+                              <i className={`fas fa-${getFileIcon(file.type)}`}></i>
+                            </div>
+                            <div className="file-details">
+                              <div className="file-name">{file.name}</div>
+                              <div className="file-size">{formatFileSize(file.size)}</div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

@@ -2,36 +2,40 @@ import React, { useState } from 'react';
 import FileUploadButton from './FileUploadButton';
 
 const MessageInput = ({ value, onChange, onSubmit, disabled }) => {
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   
-  const handleFileSelect = (file) => {
-    setSelectedFile(file);
+  const handleFileSelect = (files) => {
+    setSelectedFiles(prevFiles => [...prevFiles, ...files]);
   };
   
-  const clearSelectedFile = () => {
-    setSelectedFile(null);
+  const removeFile = (index) => {
+    setSelectedFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
   };
   
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (value.trim() || selectedFile) {
-      onSubmit(e, selectedFile);
-      clearSelectedFile();
+    if (value.trim() || selectedFiles.length > 0) {
+      onSubmit(e, selectedFiles);
+      setSelectedFiles([]);
     }
   };
   
   return (
     <div className="message-input-container">
-      {selectedFile && (
-        <div className="selected-file">
-          <span className="file-name">{selectedFile.name}</span>
-          <button 
-            type="button" 
-            className="remove-file-btn"
-            onClick={clearSelectedFile}
-          >
-            ×
-          </button>
+      {selectedFiles.length > 0 && (
+        <div className="selected-files">
+          {selectedFiles.map((file, index) => (
+            <div key={index} className="selected-file">
+              <span className="file-name">{file.name}</span>
+              <button 
+                type="button" 
+                className="remove-file-btn"
+                onClick={() => removeFile(index)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
         </div>
       )}
       <form className="message-input-form" onSubmit={handleSubmit}>
@@ -41,7 +45,7 @@ const MessageInput = ({ value, onChange, onSubmit, disabled }) => {
         />
         <textarea
           className="message-input"
-          placeholder={selectedFile ? "Add a message (optional)" : "Type your message here..."}
+          placeholder={selectedFiles.length > 0 ? "Add a message (optional)" : "Type your message here..."}
           value={value}
           onChange={onChange}
           disabled={disabled}
@@ -56,7 +60,7 @@ const MessageInput = ({ value, onChange, onSubmit, disabled }) => {
         <button 
           type="submit" 
           className="send-button"
-          disabled={disabled || (!value.trim() && !selectedFile)}
+          disabled={disabled || (!value.trim() && selectedFiles.length === 0)}
         >
           <i className="fas fa-paper-plane"></i>
         </button>

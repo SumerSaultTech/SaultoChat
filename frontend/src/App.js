@@ -121,7 +121,7 @@ function App() {
     }
   };
 
-  const sendMessage = async (message, file = null) => {
+  const sendMessage = async (message, files = []) => {
     if (!currentConversation) return;
     
     // Generate a temporary ID for the user message
@@ -130,38 +130,40 @@ function App() {
     
     // Create the message text, including file info if present
     let messageText = message || '';
-    let fileInfo = null;
+    let filesInfo = [];
     
-    if (file) {
-      // Upload the file first
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      try {
-        const uploadResponse = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
+    if (files.length > 0) {
+      // Upload all files
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
         
-        if (uploadResponse.ok) {
-          const uploadResult = await uploadResponse.json();
-          fileInfo = {
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            uploadedPath: uploadResult.filename
-          };
-          console.log('File uploaded successfully:', fileInfo);
-        } else {
-          console.error('File upload failed:', uploadResponse.status);
+        try {
+          const uploadResponse = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (uploadResponse.ok) {
+            const uploadResult = await uploadResponse.json();
+            filesInfo.push({
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              uploadedPath: uploadResult.filename
+            });
+            console.log('File uploaded successfully:', file.name);
+          } else {
+            console.error('File upload failed:', uploadResponse.status);
+          }
+        } catch (error) {
+          console.error('File upload failed:', error);
         }
-      } catch (error) {
-        console.error('File upload failed:', error);
       }
       
-      // If no message text but file attached, use the filename as message
+      // If no message text but files attached, use the filenames as message
       if (!messageText.trim()) {
-        messageText = `Attached: ${file.name}`;
+        messageText = `Attached: ${files.map(f => f.name).join(', ')}`;
       }
     }
     
@@ -172,7 +174,7 @@ function App() {
         id: tempMessageId,
         sender: 'user',
         text: messageText,
-        file: fileInfo,
+        files: filesInfo,
         timestamp: currentTime
       }
     ];
@@ -210,7 +212,12 @@ function App() {
         body: JSON.stringify({
           message: messageText,
           conversation_id: currentConversation.id,
-          file: fileInfo
+          files: filesInfo.map(file => ({
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            uploadedPath: file.uploadedPath
+          }))
         })
       });
 
@@ -221,69 +228,83 @@ function App() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let aiResponseText = '';
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-
+        // Add new chunk to buffer and split into lines
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        // Process all complete lines
+        buffer = lines.pop() || ''; // Keep last partial line in buffer
+        
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              
-              if (data.content) {
-                aiResponseText += data.content;
-                
-                // Update the AI message in real-time as it streams
-                setCurrentConversation(prev => ({
-                  ...prev,
-                  messages: prev.messages.map(msg => 
-                    msg.id === aiMessageId 
-                      ? { ...msg, text: aiResponseText, streaming: true }
-                      : msg
-                  )
-                }));
-              }
-              
-              if (data.done) {
-                // Mark streaming as complete and save to database
-                setCurrentConversation(prev => ({
-                  ...prev,
-                  messages: prev.messages.map(msg => 
-                    msg.id === aiMessageId 
-                      ? { ...msg, streaming: false }
-                      : msg
-                  )
-                }));
-                
-                // Streaming is complete - no need to reload from database
-                break;
-              }
-              
-              if (data.error) {
-                throw new Error(data.error);
-              }
-            } catch (e) {
-              // Skip malformed JSON lines
+          const trimmedLine = line.trim();
+          if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+          
+          try {
+            const jsonData = JSON.parse(trimmedLine.slice(5));
+            
+            if (jsonData.content !== undefined) {
+              aiResponseText += jsonData.content;
+              // Update the AI message in real-time
+              setCurrentConversation(prev => ({
+                ...prev,
+                messages: prev.messages.map(msg =>
+                  msg.id === aiMessageId
+                    ? { ...msg, text: aiResponseText }
+                    : msg
+                )
+              }));
             }
+            
+            if (jsonData.done) {
+              // Final update to remove streaming flag
+              setCurrentConversation(prev => ({
+                ...prev,
+                messages: prev.messages.map(msg =>
+                  msg.id === aiMessageId
+                    ? { ...msg, text: aiResponseText, streaming: false }
+                    : msg
+                )
+              }));
+              return; // Exit the streaming loop
+            }
+          } catch (e) {
+            console.error('Error parsing streaming data:', e, 'Raw line:', trimmedLine);
           }
         }
       }
+
+      // Process any remaining data in buffer
+      if (buffer.trim()) {
+        try {
+          const trimmedBuffer = buffer.trim();
+          if (trimmedBuffer.startsWith('data: ')) {
+            const jsonData = JSON.parse(trimmedBuffer.slice(5));
+            if (jsonData.content !== undefined) {
+              aiResponseText += jsonData.content;
+              setCurrentConversation(prev => ({
+                ...prev,
+                messages: prev.messages.map(msg =>
+                  msg.id === aiMessageId
+                    ? { ...msg, text: aiResponseText }
+                    : msg
+                )
+              }));
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing final buffer:', e, 'Raw buffer:', buffer);
+        }
+      }
+
     } catch (error) {
-      console.error('Error with streaming:', error);
-      
-      // Show error in the AI message instead of fallback
-      setCurrentConversation(prev => ({
-        ...prev,
-        messages: prev.messages.map(msg => 
-          msg.id === aiMessageId 
-            ? { ...msg, text: 'Sorry, I encountered an error. Please try again.', streaming: false }
-            : msg
-        )
-      }));
+      console.error('Error in chat stream:', error);
+      // Handle error appropriately
     } finally {
       setIsLoading(false);
     }

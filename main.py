@@ -903,8 +903,8 @@ def chat_stream():
                 }
                 
                 # Add file info if present
-                if 'file' in data and data['file']:
-                    user_msg["file"] = data['file']
+                if 'files' in data and data['files']:
+                    user_msg["files"] = data['files']
                 
                 # Prepare messages for the AI
                 if current_user and hasattr(current_user, 'username') and hasattr(current_user, 'company'):
@@ -923,23 +923,25 @@ def chat_stream():
                 
                 # Add the current user message with file content if present
                 message_content = user_message
-                if 'file' in data and data['file'] and 'uploadedPath' in data['file']:
-                    # Read file content if it's a text file
-                    file_path = os.path.join(os.environ.get('UPLOAD_DIR', 'uploads'), data['file']['uploadedPath'])
-                    if os.path.exists(file_path):
-                        try:
-                            # Try to read as text file
-                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                file_content = f.read()
-                            message_content = f"{user_message}\n\nHere is the content of the attached file '{data['file']['name']}':\n\n```\n{file_content}\n```"
-                        except UnicodeDecodeError:
-                            # If not a text file, just mention the file
-                            message_content = f"{user_message}\n\nFile attached: {data['file']['name']} (binary file, cannot display content)"
-                        except Exception as e:
-                            logger.error(f"Error reading file: {e}")
-                            message_content = f"{user_message}\n\nFile attached: {data['file']['name']} (error reading file: {str(e)})"
-                    else:
-                        message_content = f"{user_message}\n\nFile '{data['file']['name']}' was attached but file not found on server"
+                if 'files' in data and data['files']:
+                    # Process each file
+                    for file_info in data['files']:
+                        if 'uploadedPath' in file_info:
+                            file_path = os.path.join(os.environ.get('UPLOAD_DIR', 'uploads'), file_info['uploadedPath'])
+                            if os.path.exists(file_path):
+                                try:
+                                    # Try to read as text file
+                                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                        file_content = f.read()
+                                    message_content += f"\n\nHere is the content of the attached file '{file_info['name']}':\n\n```\n{file_content}\n```"
+                                except UnicodeDecodeError:
+                                    # If not a text file, just mention the file
+                                    message_content += f"\n\nFile attached: {file_info['name']} (binary file, cannot display content)"
+                                except Exception as e:
+                                    logger.error(f"Error reading file: {e}")
+                                    message_content += f"\n\nFile attached: {file_info['name']} (error reading file: {str(e)})"
+                            else:
+                                message_content += f"\n\nFile '{file_info['name']}' was attached but file not found on server"
                         
                 logger.info(f"Final message content being sent to AI: {message_content[:200]}...")
                 

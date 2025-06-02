@@ -5,69 +5,449 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - User Management</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .container { margin-top: 2rem; }
-        .user-list { margin-top: 2rem; }
+        :root {
+            --sumersault-dark-green: #0A482E;
+            --sumersault-light-green: #35785E;
+            --sumersault-accent-green: #5BA98A;
+            --sumersault-lightest-green: #E8F5F0;
+            --white: #FFFFFF;
+            --light-gray: #F8F9FA;
+            --border-color: #E9ECEF;
+            --text-muted: #6C757D;
+            --success-color: #28A745;
+            --danger-color: #DC3545;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--sumersault-lightest-green) 0%, var(--light-gray) 100%);
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+        }
+
+        .admin-header {
+            background: linear-gradient(135deg, var(--sumersault-dark-green) 0%, var(--sumersault-light-green) 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .admin-header h1 {
+            font-weight: 700;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .admin-header .subtitle {
+            opacity: 0.9;
+            font-size: 1.1rem;
+            margin-top: 0.5rem;
+        }
+
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        .stats-row {
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--sumersault-dark-green);
+            margin: 0;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 0.5rem;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--sumersault-accent-green), var(--sumersault-light-green));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .card-header-custom {
+            background: linear-gradient(135deg, var(--sumersault-dark-green), var(--sumersault-light-green));
+            color: white;
+            padding: 1.5rem 2rem;
+            border: none;
+        }
+
+        .card-header-custom h3 {
+            margin: 0;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .card-body-custom {
+            padding: 2rem;
+        }
+
+        .form-control {
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--sumersault-accent-green);
+            box-shadow: 0 0 0 3px rgba(91, 169, 138, 0.1);
+        }
+
+        .btn-primary-custom {
+            background: linear-gradient(135deg, var(--sumersault-dark-green), var(--sumersault-light-green));
+            border: none;
+            border-radius: 12px;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(10, 72, 46, 0.3);
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .table {
+            margin: 0;
+        }
+
+        .table thead {
+            background: var(--sumersault-lightest-green);
+        }
+
+        .table thead th {
+            border: none;
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            color: var(--sumersault-dark-green);
+            text-transform: uppercase;
+            font-size: 0.875rem;
+            letter-spacing: 0.5px;
+        }
+
+        .table tbody td {
+            padding: 1rem 1.5rem;
+            border-color: var(--border-color);
+            vertical-align: middle;
+        }
+
+        .table tbody tr:hover {
+            background-color: var(--sumersault-lightest-green);
+        }
+
+        .btn-danger-custom {
+            background: var(--danger-color);
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            color: white;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-danger-custom:hover {
+            background: #C82333;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+        }
+
+        .user-email {
+            font-weight: 500;
+            color: var(--sumersault-dark-green);
+        }
+
+        .user-date {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            color: var(--sumersault-accent-green);
+        }
+
+        .alert-custom {
+            border: none;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .alert-success-custom {
+            background: linear-gradient(135deg, #D4EDDA, #C3E6CB);
+            color: #155724;
+        }
+
+        .alert-danger-custom {
+            background: linear-gradient(135deg, #F8D7DA, #F5C6CB);
+            color: #721C24;
+        }
+
+        @media (max-width: 768px) {
+            .admin-header {
+                padding: 1.5rem 0;
+            }
+            
+            .card-body-custom {
+                padding: 1.5rem;
+            }
+            
+            .table thead th,
+            .table tbody td {
+                padding: 0.75rem;
+                font-size: 0.875rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Admin Dashboard</h1>
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Add Authorized User</h3>
+    <div class="admin-header">
+        <div class="dashboard-container">
+            <h1>
+                <i class="fas fa-shield-alt"></i>
+                Admin Dashboard
+            </h1>
+            <p class="subtitle">Manage authorized users and system access</p>
+        </div>
+    </div>
+
+    <div class="dashboard-container">
+        <!-- Statistics Row -->
+        <div class="row stats-row">
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
                     </div>
-                    <div class="card-body">
-                        <form id="addUserForm">
-                            <div class="mb-3">
-                                <label for="email" class="form-label">Email Address</label>
-                                <input type="email" class="form-control" id="email" name="email" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Add User</button>
-                        </form>
+                    <div class="stat-number" id="totalUsers">0</div>
+                    <div class="stat-label">Total Users</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-user-plus"></i>
                     </div>
+                    <div class="stat-number" id="recentUsers">0</div>
+                    <div class="stat-label">Added This Week</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-number" id="lastActivity">-</div>
+                    <div class="stat-label">Last Activity</div>
                 </div>
             </div>
         </div>
 
-        <div class="user-list">
-            <h3>Authorized Users</h3>
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Email</th>
-                        <th>Added Date</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="userList">
-                    <!-- User list will be populated here -->
-                </tbody>
-            </table>
+        <!-- Add User Card -->
+        <div class="main-card">
+            <div class="card-header-custom">
+                <h3>
+                    <i class="fas fa-user-plus"></i>
+                    Add Authorized User
+                </h3>
+            </div>
+            <div class="card-body-custom">
+                <div id="alertContainer"></div>
+                <form id="addUserForm">
+                    <div class="mb-3">
+                        <label for="email" class="form-label fw-semibold">Email Address</label>
+                        <input type="email" class="form-control" id="email" name="email" 
+                               placeholder="Enter user email address" required>
+                    </div>
+                    <button type="submit" class="btn-primary-custom">
+                        <i class="fas fa-plus"></i>
+                        Add User
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="main-card">
+            <div class="card-header-custom">
+                <h3>
+                    <i class="fas fa-list"></i>
+                    Authorized Users
+                </h3>
+            </div>
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Email Address</th>
+                            <th>Date Added</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userList">
+                        <!-- User list will be populated here -->
+                    </tbody>
+                </table>
+                <div id="emptyState" class="empty-state" style="display: none;">
+                    <i class="fas fa-users"></i>
+                    <h4>No authorized users yet</h4>
+                    <p>Start by adding your first authorized user above.</p>
+                </div>
+            </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Show alert function
+        function showAlert(message, type = 'success') {
+            const alertContainer = document.getElementById('alertContainer');
+            const alertClass = type === 'success' ? 'alert-success-custom' : 'alert-danger-custom';
+            const iconClass = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle';
+            
+            alertContainer.innerHTML = `
+                <div class="alert-custom ${alertClass}">
+                    <i class="${iconClass}"></i> ${message}
+                </div>
+            `;
+            
+            setTimeout(() => {
+                alertContainer.innerHTML = '';
+            }, 4000);
+        }
+
+        // Update statistics
+        function updateStats(users) {
+            document.getElementById('totalUsers').textContent = users.length;
+            
+            // Calculate users added this week
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+            const recentUsers = users.filter(user => new Date(user.added_date) > oneWeekAgo);
+            document.getElementById('recentUsers').textContent = recentUsers.length;
+            
+            // Last activity (most recent user addition)
+            if (users.length > 0) {
+                const lastUser = users.reduce((latest, user) => 
+                    new Date(user.added_date) > new Date(latest.added_date) ? user : latest
+                );
+                const daysSince = Math.floor((new Date() - new Date(lastUser.added_date)) / (1000 * 60 * 60 * 24));
+                document.getElementById('lastActivity').textContent = daysSince === 0 ? 'Today' : `${daysSince}d ago`;
+            }
+        }
+
         // Fetch and display authorized users
         function loadUsers() {
             fetch('/api/admin/authorized-users')
                 .then(response => response.json())
                 .then(users => {
                     const userList = document.getElementById('userList');
-                    userList.innerHTML = '';
-                    users.forEach(user => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${user.email}</td>
-                            <td>${new Date(user.added_date).toLocaleDateString()}</td>
-                            <td>
-                                <button class="btn btn-danger btn-sm" onclick="removeUser('${user._id}')">Remove</button>
-                            </td>
-                        `;
-                        userList.appendChild(row);
-                    });
+                    const emptyState = document.getElementById('emptyState');
+                    
+                    if (users.length === 0) {
+                        userList.innerHTML = '';
+                        emptyState.style.display = 'block';
+                    } else {
+                        emptyState.style.display = 'none';
+                        userList.innerHTML = '';
+                        users.forEach(user => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>
+                                    <div class="user-email">${user.email}</div>
+                                </td>
+                                <td>
+                                    <div class="user-date">${new Date(user.added_date).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric'
+                                    })}</div>
+                                </td>
+                                <td>
+                                    <button class="btn-danger-custom" onclick="removeUser('${user._id}')">
+                                        <i class="fas fa-trash"></i>
+                                        Remove
+                                    </button>
+                                </td>
+                            `;
+                            userList.appendChild(row);
+                        });
+                    }
+                    
+                    updateStats(users);
+                })
+                .catch(error => {
+                    console.error('Error loading users:', error);
+                    showAlert('Failed to load users. Please try again.', 'error');
                 });
         }
 
@@ -75,6 +455,11 @@
         document.getElementById('addUserForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const email = document.getElementById('email').value;
+            const submitBtn = this.querySelector('button[type="submit"]');
+            
+            // Disable button during request
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
             
             fetch('/api/admin/authorized-users', {
                 method: 'POST',
@@ -88,16 +473,25 @@
                 if (data.success) {
                     document.getElementById('email').value = '';
                     loadUsers();
-                    alert('User added successfully!');
+                    showAlert(`Successfully added ${email} as an authorized user!`, 'success');
                 } else {
-                    alert('Error: ' + data.message);
+                    showAlert(`Error: ${data.message}`, 'error');
                 }
+            })
+            .catch(error => {
+                console.error('Error adding user:', error);
+                showAlert('Failed to add user. Please try again.', 'error');
+            })
+            .finally(() => {
+                // Re-enable button
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-plus"></i> Add User';
             });
         });
 
         // Remove authorized user
         function removeUser(userId) {
-            if (confirm('Are you sure you want to remove this user?')) {
+            if (confirm('Are you sure you want to remove this user? They will no longer have access to the system.')) {
                 fetch(`/api/admin/authorized-users/${userId}`, {
                     method: 'DELETE'
                 })
@@ -105,10 +499,14 @@
                 .then(data => {
                     if (data.success) {
                         loadUsers();
-                        alert('User removed successfully!');
+                        showAlert('User removed successfully!', 'success');
                     } else {
-                        alert('Error: ' + data.message);
+                        showAlert(`Error: ${data.message}`, 'error');
                     }
+                })
+                .catch(error => {
+                    console.error('Error removing user:', error);
+                    showAlert('Failed to remove user. Please try again.', 'error');
                 });
             }
         }
@@ -117,4 +515,4 @@
         loadUsers();
     </script>
 </body>
-</html> 
+</html>

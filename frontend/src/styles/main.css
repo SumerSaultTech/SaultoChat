@@ -491,13 +491,19 @@ pre code {
   cursor: not-allowed;
 }
 
+.selected-files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .selected-file {
   display: flex;
   align-items: center;
   background-color: var(--sumersault-lightest-green);
   border-radius: 8px;
   padding: 8px 12px;
-  margin-bottom: 10px;
   gap: 10px;
 }
 
@@ -519,20 +525,28 @@ pre code {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  margin-left: auto;
 }
 
 .remove-file-btn:hover {
   color: #ff5252;
 }
 
-/* Attached file in messages styling */
+/* Message with multiple files */
+.attached-files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .attached-file {
   display: flex;
   align-items: center;
   background-color: var(--sumersault-lightest-green);
   border-radius: 6px;
   padding: 8px 12px;
-  margin-top: 10px;
   gap: 12px;
   max-width: 300px;
 }

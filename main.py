@@ -497,7 +497,8 @@ def get_all_conversations():
 
         conversation_list.append({
             'id': str(conv['_id']),
-            'preview': first_message[:50] + ('...' if len(first_message) > 50 else '')
+            'preview': first_message[:50] + ('...' if len(first_message) > 50 else ''),
+            'pinned': conv.get('pinned', False)  # Include pinned status, default to False if not set
         })
 
     return jsonify(conversation_list)

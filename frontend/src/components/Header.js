@@ -46,11 +46,14 @@ const Header = ({ title }) => {
             {showDropdown && (
               <div className="profile-dropdown">
                 <div className="dropdown-user-info">
-                  <span className="dropdown-name">{user.name || 'User'}</span>
+                  {/* <span className="dropdown-name">{user.name || 'User'}</span> */}
                   <span className="dropdown-email">{user.email}</span>
                   {user.company && <span className="dropdown-company">{user.company}</span>}
                 </div>
                 <div className="dropdown-separator"></div>
+                <button className="admin-dashboard-button" onClick={() => window.location.href = '/admin'}>
+                  <i className="fas fa-cog"></i> Admin Dashboard
+                </button>
                 <button className="sign-out-button" onClick={handleSignOut}>
                   <i className="fas fa-sign-out-alt"></i> Sign Out
                 </button>

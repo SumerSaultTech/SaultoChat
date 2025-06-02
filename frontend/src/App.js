@@ -34,7 +34,13 @@ function App() {
   const fetchConversations = async () => {
     try {
       const response = await axios.get('/api/conversations');
-      setConversations(response.data);
+      // Sort conversations to show pinned ones first
+      const sortedConversations = response.data.sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return 0;
+      });
+      setConversations(sortedConversations);
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }

@@ -601,3 +601,14 @@ pre code {
     margin-left: 0 !important;
   }
 }
+
+/* Header Styling */
+.header {
+    background-color: var(--sumersault-dark-green);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
